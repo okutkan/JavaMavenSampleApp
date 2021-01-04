@@ -1,7 +1,7 @@
 pipeline {
     agent {
         docker {
-            image 'maven:3-alpine'
+            image 'maven: 3-alpine'
             args '-v /root/.m2:/root/.m2'
         }
     }
@@ -11,7 +11,10 @@ pipeline {
         NEXUS_URL = "192.168.50.11:8081"
         NEXUS_REPOSITORY = "maven-nexus-repo"
         NEXUS_CREDENTIAL_ID = "nexus-user-credentials"
+        registry = "maven-nexus-repo/sampleapp"
+        registryCredential = 'nexus-user-credentials'
     }
+}
     stages {
         stage('Build') {
             steps {
@@ -25,7 +28,28 @@ pipeline {
             post {
                 always {
                     junit 'target/surefire-reports/*.xml'
+                    }
                 }
+        }
+        stage('Building image') {
+            steps{
+                script {
+                    docker.build registry + ":$BUILD_NUMBER"
+                }
+            }
+        }   
+        stage('Deploy Image') {
+            steps{
+                script {
+                    docker.withRegistry( '', registryCredential ) {
+                        dockerImage.push()
+                    }
+                }
+            }
+        }
+        stage('Remove Unused docker image') {
+            steps{
+                sh "docker rmi $registry:$BUILD_NUMBER"
             }
         }
         stage("Publish to Nexus Repository Manager") {
