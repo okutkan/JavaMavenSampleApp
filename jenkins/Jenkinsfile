@@ -11,8 +11,9 @@ pipeline {
         NEXUS_URL = "192.168.50.11:8081"
         NEXUS_REPOSITORY = "maven-nexus-repo"
         NEXUS_CREDENTIAL_ID = "nexus-user-credentials"
-        registry = "maven-nexus-repo/sampleapp"
+        imageid = "maven-nexus-repo/sampleapp"
         registryCredential = 'nexus-user-credentials'
+        CLUSTER_URL = "HTTPS://192.168.50.1:8443"
     }
 }
     stages {
@@ -34,7 +35,7 @@ pipeline {
         stage('Building image') {
             steps{
                 script {
-                    docker.build registry + ":$BUILD_NUMBER"
+                    docker.build imageid + ":$BUILD_NUMBER"
                 }
             }
         }   
@@ -49,7 +50,7 @@ pipeline {
         }
         stage('Remove Unused docker image') {
             steps{
-                sh "docker rmi $registry:$BUILD_NUMBER"
+                sh "docker rmi $imageid:$BUILD_NUMBER"
             }
         }
         stage("Publish to Nexus Repository Manager") {
@@ -90,6 +91,21 @@ pipeline {
             steps {
                 sh './jenkins/scripts/deliver.sh'
             }
+        }
+                stage("Deploy"){
+        withKubeConfig([credentialsId: 'kubernetes-sa',
+                serverUrl: CLUSTER_URL
+                ]) {
+            sh """
+                helm init --client-only
+                helm upgrade \
+                  sampleApp \
+                  --namespace default \
+                  --install \
+                  --wait \
+                  --set image=$imageid \
+                  ./helm
+            """
         }
     }
 }
